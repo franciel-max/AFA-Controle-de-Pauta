@@ -4,7 +4,7 @@ import { HearingData, DayInfo, MonthInfo, HearingSlot } from './types';
 import { TIME_SLOTS, EXTRA_POST_KEYS, MONTHS_PT, DAYS_PT, getHolidays } from './constants';
 import DayRow from './components/DayRow';
 import JusticeAILogo from './components/JusticeAILogo';
-import { analyzeHearings } from './services/geminiService';
+import CalendarModal from './components/CalendarModal';
 
 const App: React.FC = () => {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [showEarlySlots, setShowEarlySlots] = useState(false);
   const [showHiddenFridays, setShowHiddenFridays] = useState(false);
   const [showExtraPostSlots, setShowExtraPostSlots] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   
   // Estados de busca
   const [searchDayOfWeek, setSearchDayOfWeek] = useState<string>("");
@@ -39,9 +40,6 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : {};
   });
 
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [isSummarizing, setIsSummarizing] = useState(false);
-
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -64,19 +62,9 @@ const App: React.FC = () => {
     localStorage.setItem('legal_agenda_slots', JSON.stringify(slotStatus));
   }, [slotStatus]);
 
-  useEffect(() => {
-    const handleGlobalClick = (e: MouseEvent) => {
-      if (highlightedKey) {
-        const isSearchButtonClick = (e.target as HTMLElement).closest('.search-action-btn');
-        if (!isSearchButtonClick) {
-          setHighlightedKey(null);
-        }
-      }
-    };
-
-    window.addEventListener('mousedown', handleGlobalClick);
-    return () => window.removeEventListener('mousedown', handleGlobalClick);
-  }, [highlightedKey]);
+  const clearHighlight = useCallback(() => {
+    setHighlightedKey(null);
+  }, []);
 
   const toggleDayLock = useCallback((dateStr: string) => {
     setLockedDays(prev => {
@@ -164,7 +152,7 @@ const App: React.FC = () => {
         dayNumber: date.getDate(),
         dayOfWeek: DAYS_PT[dayOfWeekIndex],
         isWeekend: dayOfWeekIndex === 0 || dayOfWeekIndex === 6,
-        isHoliday: !!holidays[dateStr],
+        isHoliday: !! holidays[dateStr],
         isRecess,
         isSuspended,
         holidayName: holidays[dateStr],
@@ -267,6 +255,27 @@ const App: React.FC = () => {
     });
   }, [monthInfo.days, getDayData, showHiddenFridays, todayDate]);
 
+  const scrollToDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+    setCurrentYear(year);
+    setSelectedMonth(month);
+    setIsCalendarOpen(false);
+
+    setTimeout(() => {
+      const el = document.getElementById(`row-${dateStr}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Pequeno efeito visual de realce temporário se quiser (opcional)
+        el.classList.add('bg-blue-50');
+        setTimeout(() => el.classList.remove('bg-blue-50'), 2000);
+      }
+    }, 150);
+  };
+
   const findNextAvailableSlot = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -345,38 +354,6 @@ const App: React.FC = () => {
     setLastFoundKey(null);
   }, [todayDate, lastFoundKey, searchDayOfWeek, searchTime, lockedDays, hearingData, slotStatus, activeTimeSlots, showExtraPostSlots]);
 
-  const handleAiSummary = async () => {
-    setIsSummarizing(true);
-    setAiSummary(null);
-    const allHearings: string[] = [];
-    monthInfo.days.forEach(day => {
-      [...TIME_SLOTS, ...EXTRA_POST_KEYS].forEach(time => {
-        const key = `${day.dateStr}-${time}`;
-        const slot = hearingData[key];
-        const isMarked = slotStatus[key];
-        if (isMarked && slot && slot.type !== "horário vago" && slot.type !== "horário bloqueado") {
-          const displayTime = slot.customTime || time;
-          allHearings.push(`[${day.dateStr} ${displayTime}] TIPO DE AUDIÊNCIA: ${slot.type} | OBSERVAÇÕES: ${slot.notes}`);
-        }
-      });
-    });
-    if (allHearings.length === 0) {
-      setAiSummary("Nenhuma audiência confirmada para este mês.");
-      setIsSummarizing(false);
-      return;
-    }
-    const summary = await analyzeHearings(allHearings.slice(0, 50));
-    setAiSummary(summary);
-    setIsSummarizing(false);
-  };
-
-  const handleExportPdf = () => {
-    const originalTitle = document.title;
-    document.title = `Pauta_Digital_${monthInfo.name}_${monthInfo.year}`;
-    window.print();
-    document.title = originalTitle;
-  };
-
   const goToToday = () => {
     const now = new Date();
     setCurrentYear(now.getFullYear());
@@ -403,7 +380,7 @@ const App: React.FC = () => {
           <JusticeAILogo className="w-40 md:w-56" />
           <div className="flex flex-col">
             <h1 className="text-3xl font-black tracking-tight leading-none">
-              AFA <span className="text-blue-500">Pauta Digital</span>
+              Controle de Pauta - <span className="text-blue-500">4ª VT de Natal</span>
             </h1>
             <p className="text-[12px] text-slate-400 font-bold uppercase tracking-[0.15em] mt-1">
               JUSTIÇA DO TRABALHO • TRT 21ª REGIÃO
@@ -411,43 +388,53 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center bg-slate-800/40 p-1.5 rounded-2xl border border-slate-700/50 space-y-2 md:space-y-0 md:space-x-4 shadow-xl">
-          <div className="flex space-x-2 px-3">
-            <div className="flex flex-col">
-              <span className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">DIA DA SEMANA</span>
-              <select 
-                value={searchDayOfWeek} 
-                onChange={(e) => {setSearchDayOfWeek(e.target.value); setLastFoundKey(null);}}
-                className="bg-slate-900/80 text-[12px] font-bold py-2 px-4 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-white w-40"
-              >
-                <option value="">Qualquer dia</option>
-                {DAYS_PT.filter(d => d !== "Sábado" && d !== "Domingo").map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
+        <div className="flex flex-col items-center bg-slate-800/40 p-1.5 rounded-2xl border border-slate-700/50 space-y-2 shadow-xl">
+          <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-4">
+            <div className="flex space-x-2 px-3">
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">DIA DA SEMANA</span>
+                <select 
+                  value={searchDayOfWeek} 
+                  onChange={(e) => {setSearchDayOfWeek(e.target.value); setLastFoundKey(null);}}
+                  className="bg-slate-900/80 text-[12px] font-bold py-2 px-4 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-white w-40"
+                >
+                  <option value="">Qualquer dia</option>
+                  {DAYS_PT.filter(d => d !== "Sábado" && d !== "Domingo").map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">HORÁRIO</span>
+                <select 
+                  value={searchTime} 
+                  onChange={(e) => {setSearchTime(e.target.value); setLastFoundKey(null);}}
+                  className="bg-slate-900/80 text-[12px] font-bold py-2 px-4 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-white w-32"
+                >
+                  <option value="">Qualquer hora</option>
+                  {activeTimeSlots.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="flex flex-col">
-              <span className="text-[10px] uppercase font-bold text-slate-500 mb-1 ml-1">HORÁRIO</span>
-              <select 
-                value={searchTime} 
-                onChange={(e) => {setSearchTime(e.target.value); setLastFoundKey(null);}}
-                className="bg-slate-900/80 text-[12px] font-bold py-2 px-4 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-white w-32"
-              >
-                <option value="">Qualquer hora</option>
-                {activeTimeSlots.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
+            <button 
+              onClick={findNextAvailableSlot}
+              className="search-action-btn group flex items-center space-x-3 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg transition-all active:scale-95 h-full"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <span>LOCALIZAR PRÓXIMO</span>
+            </button>
           </div>
-
+          
           <button 
-            onClick={findNextAvailableSlot}
-            className="search-action-btn group flex items-center space-x-3 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg transition-all active:scale-95"
+            onClick={() => setIsCalendarOpen(true)}
+            className="w-full flex items-center justify-center space-x-3 bg-slate-700/60 hover:bg-slate-600/80 text-white py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all border border-white/5 active:scale-95"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <span>LOCALIZAR PRÓXIMO</span>
+            <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            <span>Abrir Calendário</span>
           </button>
         </div>
 
@@ -492,34 +479,15 @@ const App: React.FC = () => {
          >
            VER DIAS TRAVADOS
          </button>
-         
-         <div className="w-px h-8 bg-slate-300 mx-2 hidden md:block"></div>
-
-         <button 
-             onClick={(e) => { e.stopPropagation(); handleAiSummary(); }} 
-             disabled={isSummarizing} 
-             className="flex items-center space-x-2 bg-slate-900 hover:bg-black text-white py-2 px-6 rounded-lg text-[11px] font-black uppercase tracking-widest shadow transition-all active:scale-95 disabled:opacity-50"
-           >
-             <svg className={`w-4 h-4 ${isSummarizing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-             <span>RESUMO IA</span>
-           </button>
-         
-         <button 
-             onClick={(e) => { e.stopPropagation(); handleExportPdf(); }} 
-             className="flex items-center space-x-2 bg-[#BA2121] hover:bg-red-800 text-white py-2 px-6 rounded-lg text-[11px] font-black uppercase tracking-widest shadow transition-all active:scale-95"
-           >
-             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M11.363 2c4.155 0 2.637 6 2.637 6s6-1.518 6 2.638v11.362c0 .552-.448 1-1 1h-17.726c-.552 0-1-.448-1-1v-19c0-.552.448-1 1-1h10.089zm1.637 7.114c0-2.157 1.29-4.414 1.29-4.414l3.544 3.543s-2.257 1.291-4.414 1.291c-.231 0-.42-.188-.42-.42zm-5 8.886h10v-1h-10v1zm0-2h10v-1h-10v1zm0-2h10v-1h-10v1z"/></svg>
-             <span>EXPORTAR PDF</span>
-           </button>
       </div>
 
       <main ref={mainScrollRef} className="flex-1 overflow-auto bg-slate-100 custom-scrollbar">
         {visibleDays.length > 0 ? (
           <div className="min-w-max shadow-sm">
             <div className="flex sticky top-0 bg-[#E2E8F0] z-20 border-b border-slate-300 font-bold text-slate-700 uppercase tracking-wider">
-              <div className="w-8 py-4 flex items-center justify-center border-r border-slate-300 text-[11px] font-black">DIA</div>
-              <div className="w-10 py-4 flex items-center justify-center border-r border-slate-300 text-[11px] font-black text-center">SEM.</div>
-              <div className="w-12 px-2 flex items-center justify-center border-r border-slate-300 text-[11px] font-black text-center">TRAVA</div>
+              <div className="sticky left-0 z-30 w-8 py-4 flex items-center justify-center border-r border-slate-300 text-[11px] font-black bg-[#E2E8F0]">DIA</div>
+              <div className="sticky left-8 z-30 w-10 py-4 flex items-center justify-center border-r border-slate-300 text-[11px] font-black text-center bg-[#E2E8F0]">SEM.</div>
+              <div className="sticky left-[4.5rem] z-30 w-12 px-2 flex items-center justify-center border-r border-slate-300 text-[11px] font-black text-center bg-[#E2E8F0]">TRAVA</div>
               <div className="flex-1 flex items-center justify-center border-r border-slate-300 bg-slate-200 bg-opacity-40">
                 <span className="text-sm font-black text-slate-800 tracking-[0.25em] py-4 uppercase">HORÁRIOS DISPONÍVEIS NA PAUTA</span>
               </div>
@@ -538,6 +506,7 @@ const App: React.FC = () => {
                       slotStatus={status}
                       onToggleSlotStatus={(time) => toggleSlotStatus(day.dateStr, time)}
                       onCellChange={handleCellChange}
+                      onClearHighlight={clearHighlight}
                       activeTimeSlots={activeTimeSlots}
                       showExtraPostSlots={showExtraPostSlots}
                       highlightedKey={highlightedKey}
@@ -562,6 +531,14 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
+
+      <CalendarModal 
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        onSelectDate={scrollToDate}
+        currentYear={currentYear}
+        currentMonth={selectedMonth}
+      />
 
       <footer className="bg-white border-t border-slate-200 p-4 flex flex-col md:flex-row justify-between items-center text-[11px] text-slate-500 space-y-3 md:space-y-0 no-print">
         <div className="flex items-center space-x-6">

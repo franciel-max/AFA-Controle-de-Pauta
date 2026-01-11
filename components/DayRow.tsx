@@ -12,6 +12,7 @@ interface DayRowProps {
   slotStatus: { [time: string]: boolean };
   onToggleSlotStatus: (time: string) => void;
   onCellChange: (dateStr: string, time: string, field: keyof HearingSlot, value: string) => void;
+  onClearHighlight: () => void;
   activeTimeSlots: string[];
   showExtraPostSlots: boolean;
   highlightedKey?: string | null;
@@ -25,6 +26,7 @@ const DayRow: React.FC<DayRowProps> = ({
   slotStatus, 
   onToggleSlotStatus, 
   onCellChange,
+  onClearHighlight,
   activeTimeSlots,
   showExtraPostSlots,
   highlightedKey
@@ -32,11 +34,11 @@ const DayRow: React.FC<DayRowProps> = ({
   const isWeekendOrHoliday = day.isWeekend || day.isHoliday || day.isRecess || day.isSuspended;
   
   const getRowBg = () => {
-    if (day.isRecess) return 'bg-indigo-50 bg-opacity-60';
-    if (day.isSuspended) return 'bg-emerald-50 bg-opacity-60';
+    if (day.isRecess) return 'bg-indigo-50';
+    if (day.isSuspended) return 'bg-emerald-50';
     if (day.isWeekend) return 'bg-slate-100';
     if (day.isHoliday) return 'bg-amber-50';
-    if (isLocked) return 'bg-slate-200 bg-opacity-40';
+    if (isLocked) return 'bg-slate-200';
     return 'bg-white';
   };
 
@@ -49,15 +51,17 @@ const DayRow: React.FC<DayRowProps> = ({
     return 'text-slate-900';
   };
 
+  const rowBgClass = getRowBg();
+
   return (
-    <div className={`flex border-b border-slate-200 min-w-max hover:bg-slate-50 transition-colors ${getRowBg()}`}>
-      {/* Coluna Dia */}
-      <div className={`w-8 flex items-center justify-center border-r border-slate-200 py-3 text-[11px] font-bold ${getDayColor()}`}>
+    <div className={`flex border-b border-slate-200 min-w-max hover:bg-slate-50 transition-colors ${rowBgClass}`}>
+      {/* Coluna Dia (Congelada) */}
+      <div className={`sticky left-0 z-10 w-8 flex items-center justify-center border-r border-slate-200 py-3 text-[11px] font-bold ${rowBgClass} ${getDayColor()}`}>
         {day.dayNumber}
       </div>
       
-      {/* Coluna Semana */}
-      <div className={`w-10 flex flex-col items-center justify-center border-r border-slate-200 py-2 relative overflow-hidden ${getDayColor()}`}>
+      {/* Coluna Semana (Congelada) */}
+      <div className={`sticky left-8 z-10 w-10 flex flex-col items-center justify-center border-r border-slate-200 py-2 relative overflow-hidden ${rowBgClass} ${getDayColor()}`}>
         <span 
           className="text-[9px] uppercase font-bold tracking-tighter whitespace-nowrap select-none"
           style={{ 
@@ -77,8 +81,8 @@ const DayRow: React.FC<DayRowProps> = ({
         )}
       </div>
 
-      {/* Coluna Trava */}
-      <div className="w-12 flex items-center justify-center border-r border-slate-200">
+      {/* Coluna Trava (Congelada) */}
+      <div className={`sticky left-[4.5rem] z-10 w-12 flex items-center justify-center border-r border-slate-200 ${rowBgClass}`}>
         {!isWeekendOrHoliday && (
           <label className="relative inline-flex items-center cursor-pointer">
             <input 
@@ -112,6 +116,7 @@ const DayRow: React.FC<DayRowProps> = ({
             isRecess={day.isRecess}
             isSuspended={day.isSuspended}
             isHighlighted={highlightedKey === `${day.dateStr}-${time}`}
+            onClearHighlight={onClearHighlight}
             onChange={(field, val) => onCellChange(day.dateStr, time, field, val)}
           />
         ))}
@@ -129,6 +134,7 @@ const DayRow: React.FC<DayRowProps> = ({
             isRecess={day.isRecess}
             isSuspended={day.isSuspended}
             isHighlighted={highlightedKey === `${day.dateStr}-${key}`}
+            onClearHighlight={onClearHighlight}
             onChange={(field, val) => onCellChange(day.dateStr, key, field, val)}
           />
         ))}

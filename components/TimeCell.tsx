@@ -9,6 +9,7 @@ interface TimeCellProps {
   isSet: boolean;
   onToggleSet: () => void;
   onChange: (field: keyof HearingSlot, val: string) => void;
+  onClearHighlight?: () => void;
   disabled?: boolean;
   isNonWorkingDay?: boolean;
   isRecess?: boolean;
@@ -23,6 +24,7 @@ const TimeCell: React.FC<TimeCellProps> = ({
   isSet, 
   onToggleSet, 
   onChange, 
+  onClearHighlight,
   disabled, 
   isNonWorkingDay,
   isRecess,
@@ -73,11 +75,16 @@ const TimeCell: React.FC<TimeCellProps> = ({
 
   return (
     <div 
-      className={`flex flex-col border-r border-slate-200 min-w-[140px] h-full transition-all duration-300 ${bgColor} ${isHighlighted ? 'ring-4 ring-blue-600 ring-inset z-10' : ''}`}
+      onClick={() => {
+        if (isHighlighted && onClearHighlight) {
+          onClearHighlight();
+        }
+      }}
+      className={`flex flex-col border-r border-slate-200 min-w-[140px] h-full transition-all duration-300 cursor-default ${bgColor} ${isHighlighted ? 'ring-4 ring-blue-600 ring-inset z-10' : ''}`}
     >
       {/* Cabeçalho da Célula (Horário) */}
       <div className={`py-1.5 px-2 text-[10px] font-bold border-b border-slate-200 flex items-center justify-between transition-colors ${headerColor}`}>
-        <span className="flex items-center space-x-1 flex-1">
+        <span className={`flex items-center space-x-1 flex-1 ${isHighlighted ? 'animate-pulse' : ''}`}>
           {isExtra ? (
             <input 
               type="text"
@@ -85,12 +92,14 @@ const TimeCell: React.FC<TimeCellProps> = ({
               value={value.customTime || ""}
               onChange={(e) => onChange('customTime', e.target.value)}
               placeholder="00:00"
-              className={`bg-transparent border-b border-current w-12 text-center focus:outline-none placeholder-current/50 font-bold`}
+              className={`bg-transparent border-b border-current w-12 text-center focus:outline-none placeholder-current/50 font-bold transition-all ${isHighlighted ? 'bg-blue-600 text-white px-1.5 py-0.5 rounded shadow-lg ring-2 ring-blue-400 scale-110' : ''}`}
             />
           ) : (
-            <span>{time}</span>
+            <span className={`transition-all duration-300 ${isHighlighted ? 'bg-blue-600 text-white px-2 py-0.5 rounded-full shadow-lg ring-2 ring-blue-300 scale-110' : ''}`}>
+              {time}
+            </span>
           )}
-          {isExtra && <span className="text-[8px] opacity-70 ml-1">EXT</span>}
+          {isExtra && <span className={`text-[8px] opacity-70 ml-1 ${isHighlighted ? 'text-white' : ''}`}>EXT</span>}
         </span>
 
         {!isSelectDisabled && (
